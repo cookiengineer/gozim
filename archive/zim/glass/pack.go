@@ -149,16 +149,12 @@ func unpackUintPreservingSort(buf []byte) (uint64, int, error) {
 		temp <<= 1
 	}
 
-	if leadingOnes == 8 {
-		// 9-byte format: 0xFE followed by 8-byte big-endian.
-		if len(buf) < 9 {
-			return 0, 0, fmt.Errorf("glass: truncated 9-byte sort-preserving uint")
-		}
-		value := binary.BigEndian.Uint64(buf[1:9])
-		return value, 9, nil
-	}
-
-	nBytes := leadingOnes + 1
+	// nBytes = leadingOnes + 2:
+	//   0x80 (1 leading one)  -> 3 bytes
+	//   0xC0 (2 leading ones) -> 4 bytes
+	//   ...
+	//   0xFE (7 leading ones) -> 9 bytes
+	nBytes := leadingOnes + 2
 	if len(buf) < nBytes {
 		return 0, 0, fmt.Errorf("glass: truncated %d-byte sort-preserving uint", nBytes)
 	}

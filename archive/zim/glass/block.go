@@ -16,7 +16,7 @@ type Block struct {
 	TotalFree uint16
 	DirEnd   uint16
 	Items    []BlockItem
-	Data     []byte // Raw block data (8192 bytes).
+	Data     []byte
 }
 
 // BlockItem represents a single item within a block.
@@ -44,9 +44,10 @@ func ReadBlock(data []byte) (*Block, error) {
 		return nil, fmt.Errorf("glass: block too short (%d bytes)", len(data))
 	}
 
+	level := data[4]
 	b := &Block{
 		Revision:  binary.BigEndian.Uint32(data[0:4]),
-		Level:     data[4],
+		Level:     level,
 		MaxFree:   binary.BigEndian.Uint16(data[5:7]),
 		TotalFree: binary.BigEndian.Uint16(data[7:9]),
 		DirEnd:    binary.BigEndian.Uint16(data[9:11]),

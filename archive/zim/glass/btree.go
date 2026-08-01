@@ -55,104 +55,132 @@ func (bt *BTree) searchBlock(block *Block, key []byte) ([]byte, bool, error) {
 	idx := block.FindItem(key)
 
 	if block.Level == 0 {
-		// Leaf level: check if the item matches.
 		if idx < len(block.Items) && bytes.Equal(block.Items[idx].Key, key) {
 			return block.Items[idx].Tag, true, nil
 		}
 		return nil, false, nil
 	}
 
-	// Branch level: follow the child pointer.
+	// Branch level: items[i] is [blockNumber, key, componentCount].
+	// items[i].BlockNumber points to the child for the subtree.
+	// items[i].Key is the key separator (first key in child after splits).
+	// FindItem returns first item with Key >= search key.
+	// For keys < items[0].Key, or when items[0].Key is null, use items[0].BlockNumber.
+	// For keys >= items[0].Key, the child is items[idx-1] for idx>0,
+	// or items[0] if idx==0.
+	var childIdx int
 	if idx == 0 {
-		// Key is less than the first separator: follow the first child.
-		// In a B-tree, items at idx point to child blocks containing keys < item key.
-		// But we need the child pointer for the range covering the target key.
-		// The convention: item[i] has block[i] group to the left.
-		return nil, false, fmt.Errorf("glass: key before first branch separator")
+		childIdx = 0
+	} else {
+		childIdx = idx - 1
 	}
 
-	// The child block for keys in the range (items[idx-1].Key, items[idx].Key)
-	// is stored at items[idx-1].BlockNumber.
-	item := block.Items[idx-1]
-	child, ok := bt.Blocks[item.BlockNumber]
+	childNum := block.Items[childIdx].BlockNumber
+	child, ok := bt.Blocks[childNum]
 	if !ok {
-		return nil, false, fmt.Errorf("glass: child block %d not found", item.BlockNumber)
+		return nil, false, fmt.Errorf("glass: child block %d not found", childNum)
 	}
-
 	return bt.searchBlock(child, key)
 }
 
 // Insert adds a key-value pair to the B-tree.
-func (bt *BTree) Insert(key, tag []byte) error {
+// Returns true if a new entry was created, false if an existing entry was updated.
+func (bt *BTree) Insert(key, tag []byte) (bool, error) {
 	if bt.Root == blockNone {
-		// Create the first leaf block.
 		block := NewBlock()
 		block.Level = 0
 		block.Revision = 1
-
-		item := BlockItem{
-			Key:            key,
-			Tag:            tag,
-			FirstComponent: true,
-			LastComponent:  true,
-			Compressed:     false,
-			IsBranch:       false,
-		}
-
-		block.Items = append(block.Items, item)
+		block.Items = append(block.Items, BlockItem{Key: key, Tag: tag, FirstComponent: true, LastComponent: true})
 		bt.MaxBlock++
 		bt.Root = bt.MaxBlock
 		bt.Level = 0
 		bt.NumEntries = 1
 		bt.Blocks[bt.Root] = block
-
-		return nil
+		return true, nil
 	}
 
-	root := bt.Blocks[bt.Root]
-	newRoot, err := bt.insertIntoBlock(root, key, tag)
+	wasNew, err := bt.insertAtRoot(key, tag)
 	if err != nil {
-		return err
+		return false, err
+	}
+	if wasNew {
+		bt.NumEntries++
+	}
+	return wasNew, nil
+}
+
+// insertAtRoot handles insertion starting from the current root.
+func (bt *BTree) insertAtRoot(key, tag []byte) (bool, error) {
+	root := bt.Blocks[bt.Root]
+	newBlock, existed, err := bt.insertIntoBlock(root, key, tag)
+	if err != nil {
+		return false, err
 	}
 
-	if newRoot != nil {
-		// Root was split.
+	if newBlock != nil {
+		// Root split: create a new root block with two children.
 		bt.MaxBlock++
-		newRootNum := bt.MaxBlock
-		bt.Blocks[newRootNum] = newRoot
-		bt.Root = newRootNum
+		newBlockNum := bt.MaxBlock
+		bt.Blocks[newBlockNum] = newBlock
+
+		newRoot := NewBlock()
+		newRoot.Level = bt.Level + 1
+		newRoot.Revision = 1
+
+		// First item: null key pointing to old root (left child)
+		newRoot.Items = append(newRoot.Items, BlockItem{
+			Key:         []byte{},
+			BlockNumber: bt.Root,
+			IsBranch:    true,
+		})
+
+		// Second item: separator key pointing to new child (right child)
+		newRoot.Items = append(newRoot.Items, BlockItem{
+			Key:         newBlock.Items[0].Key,
+			BlockNumber: newBlockNum,
+			IsBranch:    true,
+		})
+
+		bt.MaxBlock++
+		bt.Root = bt.MaxBlock
+		bt.Blocks[bt.Root] = newRoot
 		bt.Level++
 	}
 
-	bt.NumEntries++
-	return nil
+	return !existed, nil
 }
 
 // insertIntoBlock recursively inserts a key-tag pair into a block, splitting if needed.
-func (bt *BTree) insertIntoBlock(block *Block, key, tag []byte) (*Block, error) {
+// Returns (new block if split, whether key already existed, error).
+func (bt *BTree) insertIntoBlock(block *Block, key, tag []byte) (*Block, bool, error) {
 	if block.Level == 0 {
 		return bt.insertIntoLeaf(block, key, tag)
 	}
 
-	// Branch block: find the child and recurse.
 	idx := block.FindItem(key)
+
+	// For branch blocks, items[i].BlockNumber is the child.
+	// The first item (items[0]) is always the leftmost child.
+	// Use items[idx-1] for idx>0, or items[0] if idx==0.
+	var childIdx int
 	if idx == 0 {
-		return nil, fmt.Errorf("glass: key before first branch separator")
+		childIdx = 0
+	} else {
+		childIdx = idx - 1
 	}
 
-	childItem := block.Items[idx-1]
-	child, ok := bt.Blocks[childItem.BlockNumber]
+	childNum := block.Items[childIdx].BlockNumber
+	child, ok := bt.Blocks[childNum]
 	if !ok {
-		return nil, fmt.Errorf("glass: child block %d not found", childItem.BlockNumber)
+		return nil, false, fmt.Errorf("glass: child block %d not found", childNum)
 	}
 
-	newChild, err := bt.insertIntoBlock(child, key, tag)
+	newChild, existed, err := bt.insertIntoBlock(child, key, tag)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	if newChild != nil {
-		// Child was split; insert separator into this branch block.
 		bt.MaxBlock++
 		newChildNum := bt.MaxBlock
 		bt.Blocks[newChildNum] = newChild
@@ -163,50 +191,49 @@ func (bt *BTree) insertIntoBlock(block *Block, key, tag []byte) (*Block, error) 
 			IsBranch:    true,
 		}
 
-		return bt.insertBranchItem(block, separatorItem)
+		newRoot, err := bt.insertBranchItem(block, separatorItem, childIdx)
+		return newRoot, existed, err
 	}
 
-	return nil, nil
+	return nil, existed, nil
 }
 
 // insertIntoLeaf inserts a key-tag pair into a leaf block, splitting if full.
-func (bt *BTree) insertIntoLeaf(block *Block, key, tag []byte) (*Block, error) {
+// Returns (new block if split, whether key already existed, error).
+func (bt *BTree) insertIntoLeaf(block *Block, key, tag []byte) (*Block, bool, error) {
 	idx := block.FindItem(key)
 	if idx < len(block.Items) && bytes.Equal(block.Items[idx].Key, key) {
-		// Update existing key.
 		block.Items[idx].Tag = tag
-		return nil, nil
+		return nil, true, nil
 	}
 
 	item := BlockItem{
-		Key:            key,
-		Tag:            tag,
-		FirstComponent: true,
-		LastComponent:  true,
-		Compressed:     false,
-		IsBranch:       false,
+		Key: key, Tag: tag, FirstComponent: true, LastComponent: true,
+		Compressed: false, IsBranch: false,
 	}
 
-	// Insert at the correct position.
 	block.Items = append(block.Items, BlockItem{})
 	copy(block.Items[idx+1:], block.Items[idx:])
 	block.Items[idx] = item
 
-	// Check if the block needs splitting.
 	if bt.blockNeedsSplit(block) {
-		return bt.splitBlock(block)
+		rightBlock, err := bt.splitBlock(block)
+		return rightBlock, false, err
 	}
 
-	return nil, nil
+	return nil, false, nil
 }
 
 // insertBranchItem inserts a separator into a branch block, splitting if full.
-func (bt *BTree) insertBranchItem(block *Block, item BlockItem) (*Block, error) {
-	idx := block.FindItem(item.Key)
+// childIdx is the index of the child item that was split, so the new
+// separator goes after it.
+func (bt *BTree) insertBranchItem(block *Block, item BlockItem, childIdx int) (*Block, error) {
+	// Insert after the child that was split.
+	insertAt := childIdx + 1
 
 	block.Items = append(block.Items, BlockItem{})
-	copy(block.Items[idx+1:], block.Items[idx:])
-	block.Items[idx] = item
+	copy(block.Items[insertAt+1:], block.Items[insertAt:])
+	block.Items[insertAt] = item
 
 	if bt.blockNeedsSplit(block) {
 		return bt.splitBlock(block)
@@ -217,16 +244,20 @@ func (bt *BTree) insertBranchItem(block *Block, item BlockItem) (*Block, error) 
 
 // blockNeedsSplit returns true if the block is full.
 func (bt *BTree) blockNeedsSplit(block *Block) bool {
-	// Estimate encoded size.
-	encoded := block.Encode()
-	// Check if items start encroaching on directory space.
-	minItemStart := uint16(DirStart + len(block.Items)*2 + 2)
-	return encoded[DirStart-1] != 0 || minItemStart > 8100
+	// Each item occupies: key length + tag length + ~5 bytes overhead.
+	// Estimate average item size from the first few items.
+	var totalSize int
+	for _, item := range block.Items {
+		totalSize += len(item.Key) + len(item.Tag) + 5
+	}
+	// Directory space: 2 bytes per item.
+	estUsed := DirStart + len(block.Items)*2 + totalSize
+	// Reserve ~64 bytes for the next item.
+	return estUsed+64 > BlockSize
 }
 
 // splitBlock splits a full block into two halves.
 func (bt *BTree) splitBlock(block *Block) (*Block, error) {
-	// Sort items by key.
 	sort.Slice(block.Items, func(i, j int) bool {
 		return bytes.Compare(block.Items[i].Key, block.Items[j].Key) < 0
 	})
@@ -284,12 +315,13 @@ func (c *Cursor) seekToLeaf(blockNum uint32, key []byte) error {
 	}
 
 	idx := block.FindItem(key)
+	var childIdx int
 	if idx == 0 {
-		return fmt.Errorf("glass: key before first branch separator")
+		childIdx = 0
+	} else {
+		childIdx = idx - 1
 	}
-
-	childItem := block.Items[idx-1]
-	return c.seekToLeaf(childItem.BlockNumber, key)
+	return c.seekToLeaf(block.Items[childIdx].BlockNumber, key)
 }
 
 // Next advances the cursor to the next entry.

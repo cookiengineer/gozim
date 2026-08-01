@@ -44,14 +44,27 @@ func NewTable(tableType TableType) *Table {
 	}
 }
 
-// Get retrieves a value by key.
+// Get retrieves a value by key. Decompresses if stored compressed.
 func (t *Table) Get(key []byte) ([]byte, bool, error) {
-	return t.btree.Get(key)
+	tag, ok, err := t.btree.Get(key)
+	if err != nil || !ok {
+		return tag, ok, err
+	}
+
+	// If the tag was compressed by Insert, decompress it.
+	if t.compressMin > 0 && len(tag) > 0 {
+		decompressed, err := DecompressTag(tag)
+		if err == nil {
+			return decompressed, true, nil
+		}
+		// If decompress fails, return the raw tag.
+	}
+
+	return tag, true, nil
 }
 
 // Insert adds a key-value pair to the table.
 func (t *Table) Insert(key, tag []byte) error {
-	// Compress the tag if it's large enough.
 	if t.compressMin > 0 && len(tag) >= t.compressMin {
 		compressed, err := CompressTag(tag)
 		if err == nil && len(compressed) < len(tag) {
@@ -59,7 +72,8 @@ func (t *Table) Insert(key, tag []byte) error {
 		}
 	}
 
-	return t.btree.Insert(key, tag)
+	_, err := t.btree.Insert(key, tag)
+	return err
 }
 
 // Cursor returns a cursor positioned at the first entry >= key.

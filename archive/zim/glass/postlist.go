@@ -120,9 +120,12 @@ func DecodeFirstChunk(data []byte) (*PostingListChunk, int, error) {
 	offset += n
 
 	// Decode individual postings.
+	// The first posting's WDF is not stored directly.
+	// It is collFreq minus the sum of all subsequent postings' WDFs.
+	firstWDF := collFreq
 	chunk.Postings = append(chunk.Postings, Posting{
 		DocumentID: chunk.FirstDocID,
-		WDF:        uint32(collFreq), // WDF for first posting is collfreq... actually not.
+		WDF:        0, // Will be recomputed below.
 	})
 
 	prevDocID := chunk.FirstDocID
@@ -144,7 +147,13 @@ func DecodeFirstChunk(data []byte) (*PostingListChunk, int, error) {
 			DocumentID: docID,
 			WDF:        uint32(wdf),
 		})
+		firstWDF -= wdf
 		prevDocID = docID
+	}
+
+	// Set the first posting's WDF.
+	if firstWDF > 0 && len(chunk.Postings) > 0 {
+		chunk.Postings[0].WDF = uint32(firstWDF)
 	}
 
 	return chunk, offset, nil
