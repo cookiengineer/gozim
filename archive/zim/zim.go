@@ -1,27 +1,36 @@
 package zim
 
 const (
-	// Magic is the ZIM file magic number: "ZIM" with leading 0x04 in little-endian.
+	// Magic is the ZIM file magic number.
+	// In little-endian byte order, it spells "ZIM" followed by 0x04.
 	Magic = 0x044d495a
 
 	// MajorVersion is the current ZIM major version number.
 	MajorVersion = 6
 
 	// MinorVersion is the current ZIM minor version number.
-	// Minor >= 1 indicates the new namespace scheme (C/M/X).
+	// Minor >= 1 indicates the new namespace scheme (C/M/W/X).
 	MinorVersion = 3
 
 	// OldMajorVersion is the previous ZIM major version number.
+	// Version 5 files use the old namespace scheme (A/I/J/-/M/X).
 	OldMajorVersion = 5
 
 	// HeaderSize is the fixed size of the ZIM file header in bytes.
 	HeaderSize = 80
 
-	// ChecksumSize is the size of the MD5 checksum stored at the end of the file.
+	// ChecksumSize is the size of the MD5 checksum appended to the
+	// end of the file, in bytes.
 	ChecksumSize = 16
 )
 
-// Compression is the compression algorithm used for cluster data.
+// Compression specifies the algorithm used for cluster data.
+//
+// Values match the on-disk ZIM format byte:
+//
+//	1 = no compression
+//	4 = LZMA2/XZ (legacy)
+//	5 = Zstandard
 type Compression uint8
 
 const (

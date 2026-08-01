@@ -1,0 +1,409 @@
+Beginning 2021, we change the way we handle namespaces in ZIM file format.
+
+This is major change in the way we handle entries in libzim and the semantics around but it is not a break in the binary zim format. Old library/readers are compatible with new zim files.
+
+This page describe the new format. The old format can be found here : ZIM file format old namespace.
+
+Header
+======
+
+A ZIM archive starts with a header :
+
++------------------+---------+--------+--------+-----------------------------------------------------------+
+| Field Name       | Type    | Offset | Length | Description                                               |
++------------------+---------+--------+--------+-----------------------------------------------------------+
+| magicNumber      | integer | 0      | 4      | Magic number to recognise the file format, must be        |
+|                  |         |        |        | 72173914 (0x44D495A)                                      |
++------------------+---------+--------+--------+-----------------------------------------------------------+
+| majorVersion     | integer | 4      | 2      | Major version of the ZIM archive format. Major version is |
+|                  |         |        |        | updated when an incompatible change is integrated in the  |
+|                  |         |        |        | format (a lib made for a version N will probably not be   |
+|                  |         |        |        | able to read a version N+1)                               |
++------------------+---------+--------+--------+-----------------------------------------------------------+
+| minorVersion     | integer | 6      | 2      | Minor version of the ZIM archive format. Minor version is |
+|                  |         |        |        | updated when an compatible change is integrated (a lib    |
+|                  |         |        |        | made for a minor version n will be able to read a version |
+|                  |         |        |        | n+1)                                                      |
++------------------+---------+--------+--------+-----------------------------------------------------------+
+| uuid             | integer | 8      | 16     | unique id of this zim archive                             |
++------------------+---------+--------+--------+-----------------------------------------------------------+
+| entryCount       | integer | 24     | 4      | total number of entries                                   |
++------------------+---------+--------+--------+-----------------------------------------------------------+
+| clusterCount     | integer | 28     | 4      | total number of clusters                                  |
++------------------+---------+--------+--------+-----------------------------------------------------------+
+| pathPtrPos       | integer | 32     | 8      | position of the directory pointerlist ordered by Path     |
++------------------+---------+--------+--------+-----------------------------------------------------------+
+| titlePtrPos      | integer | 40     | 8      | position of the directory pointerlist ordered by Title.   |
+|                  |         |        |        | This is considered as obsolete, readers should use        |
+|                  |         |        |        | X/listing/titleordered/v0 instead and fallback to         |
+|                  |         |        |        | titlePtrPos if entry is not present.                      |
++------------------+---------+--------+--------+-----------------------------------------------------------+
+| clusterPtrPos    | integer | 48     | 8      | position of the cluster pointer list                      |
++------------------+---------+--------+--------+-----------------------------------------------------------+
+| mimeListPos      | integer | 56     | 8      | position of the MIME type list (also header size)         |
++------------------+---------+--------+--------+-----------------------------------------------------------+
+| mainPage         | integer | 64     | 4      | main page or 0xffffffff if no main page                   |
++------------------+---------+--------+--------+-----------------------------------------------------------+
+| layoutPage       | integer | 68     | 4      | layout page or 0xffffffffff if no layout page             |
+|                  |         |        |        | (deprecated, always 0xffffffffff)                         |
++------------------+---------+--------+--------+-----------------------------------------------------------+
+| checksumPos      | integer | 72     | 8      | pointer to the md5checksum of this archive without the    |
+|                  |         |        |        | checksum itself. This points always 16 bytes before the   |
+|                  |         |        |        | end of the archive.                                       |
++------------------+---------+--------+--------+-----------------------------------------------------------+
+
+A ZIM archive may be embedded in another file at a specific offset. In the context of the ZIM format, the start of the ZIM header is the offset 0. Readers allowing to read an embedded archive must adapt offset accordingly.
+
+Major & Minor versions
+----------------------
+
+Versioning of the file format specification has not been done rigorously until version 5.
+
+Before version 5, there was only one version number and no Major vs Minor distinction.
+
+ZIM format versions:
+
++-------+-------+---------------------+---------------------------------------------------------+-----------------------------------+
+| Major | Minor | Backward compatible | Description                                             | libzim version                    |
++-------+-------+---------------------+---------------------------------------------------------+-----------------------------------+
+| 0     |       | no                  | This version features have not been tracked properly    | Unknown                           |
++-------+-------+---------------------+---------------------------------------------------------+-----------------------------------+
+| 1     |       | no                  | This version features have not been tracked properly    | Unknown                           |
++-------+-------+---------------------+---------------------------------------------------------+-----------------------------------+
+| 2     |       | no                  | This version features have not been tracked properly    | Unknown                           |
++-------+-------+---------------------+---------------------------------------------------------+-----------------------------------+
+| 3     |       | no                  | This version features have not been tracked properly    | Unknown                           |
++-------+-------+---------------------+---------------------------------------------------------+-----------------------------------+
+| 4     |       | no                  | This version features have not been tracked properly    | Unknown                           |
++-------+-------+---------------------+---------------------------------------------------------+-----------------------------------+
+| 5     |       | yes                 | Introduces:                                             | From date 2009-11-29              |
+|       |       |                     | - Path index (was only title indexed before)            | Until 6.3.1 (included)            |
+|       |       |                     | - MimeList Pos                                          |                                   |
+|       |       |                     | - Stop support of ZIM file chunks arbitrarily made.     |                                   |
+|       |       |                     |   Splitted ZIM files should be from then done with      |                                   |
+|       |       |                     |   zimsplit (from libzim 3.0.0, 20 october)              |                                   |
++-------+-------+---------------------+---------------------------------------------------------+-----------------------------------+
+| 5     | 0     | yes                 | Introduces:                                             | From 3.2.0                        |
+|       |       |                     | - Notion of Major and Minor version                     |                                   |
++-------+-------+---------------------+---------------------------------------------------------+-----------------------------------+
+| 6     | 0     | no                  | Introduces extended clusters.                           | From 3.2.0                        |
+|       |       |                     | Still uses "old" namespaces                             |                                   |
++-------+-------+---------------------+---------------------------------------------------------+-----------------------------------+
+| 6     | 1     | yes                 | Introduces "new" namespaces scheme                      | From 7.0.0                        |
++-------+-------+---------------------+---------------------------------------------------------+-----------------------------------+
+| 6     | 2     | yes                 | Explicitly allows alias entries (several entries        | From 9.1.0                        |
+|       |       |                     | pointing to the same cluster/blob)                      |                                   |
++-------+-------+---------------------+---------------------------------------------------------+-----------------------------------+
+| 6     | 3     | yes                 | Removes Title index "listing/titleOrdered/v0" (old      | From 9.3.0                        |
+|       |       |                     | zimcheck will complain)                                 |                                   |
++-------+-------+---------------------+---------------------------------------------------------+-----------------------------------+
+
+MIME Type List (mimeListPos)
+=============================
+
+The MIME type list always follows directly after the header, so the mimeListPos also defines the end and size of the ZIM file header.
+
+The MIME types in this list are zero terminated strings. An empty string marks the end of the MIME type list.
+
++-------------------+--------+--------+----------------+--------------------------------------------------+
+| Field Name        | Type   | Offset | Length         | Description                                      |
++-------------------+--------+--------+----------------+--------------------------------------------------+
+| <1st MIME Type>   | string | 0      | zero terminated | declaration of the <1st MIME Type>               |
++-------------------+--------+--------+----------------+--------------------------------------------------+
+| <2nd MIME Type>   | string | n/a    | zero terminated | declaration of the <2nd MIME Type>               |
++-------------------+--------+--------+----------------+--------------------------------------------------+
+| ...               | string | ...    | zero terminated | ...                                              |
++-------------------+--------+--------+----------------+--------------------------------------------------+
+| <last entry/end>  | string | n/a    | zero terminated | empty string - end of MIME type list             |
++-------------------+--------+--------+----------------+--------------------------------------------------+
+
+Path Pointer List (pathPtrPos)
+===============================
+
+The Path pointer list is a list of 8 byte offsets to the directory entries.
+
+The directory entries are always ordered by "full" path (<namespace><path>). Ordering is simply done by comparing the path strings (utf8 encoded)
+
+Since directory entries have variable sizes this is needed for random access.
+
++--------------+---------+----------+--------+---------------------------------------------------+
+| Field Name   | Type    | Offset   | Length | Description                                       |
++--------------+---------+----------+--------+---------------------------------------------------+
+| <1st path>   | integer | 0        | 8      | pointer to the directory entry of <1st path>      |
++--------------+---------+----------+--------+---------------------------------------------------+
+| <2nd path>   | integer | 8        | 8      | pointer to the directory entry of <2nd path>      |
++--------------+---------+----------+--------+---------------------------------------------------+
+| <nth path>   | integer | (n-1)*8  | 8      | pointer to the directory entry of <nth path>      |
++--------------+---------+----------+--------+---------------------------------------------------+
+| ...          | integer | ...      | 8      | ...                                               |
++--------------+---------+----------+--------+---------------------------------------------------+
+
+Libzim caches directory entries and references the cached entries via the path pointers.
+
+Title Pointer List (titlePtrPos)
+=================================
+
+The title pointer list is a list of entry indices ordered by title (<namespace><title>). The title pointer list actually points to entries in the path pointer list.
+
+Note that the title pointers are only 4 bytes. They are not offsets in the file but entry numbers.
+
+To get the offset of an entry from the title pointer list, you have to look it up in the path pointer list.
+
++---------------+---------+----------+--------+---------------------------------------------------+
+| Field Name    | Type    | Offset   | Length | Description                                       |
++---------------+---------+----------+--------+---------------------------------------------------+
+| <1st Title>   | integer | 0        | 4      | pointer to the path pointer of <1st Title>        |
++---------------+---------+----------+--------+---------------------------------------------------+
+| <2nd Title>   | integer | 4        | 4      | pointer to the path pointer of <2nd Title>        |
++---------------+---------+----------+--------+---------------------------------------------------+
+| <nth Title>   | integer | (n-1)*4  | 4      | pointer to the path pointer of <nth Title>        |
++---------------+---------+----------+--------+---------------------------------------------------+
+| ...           | integer | ...      | 4      | ...                                               |
++---------------+---------+----------+--------+---------------------------------------------------+
+
+The indirection from titles via Paths to directory entries has two reasons:
+* the pointer list is only half in size as 4 bytes are enough for each entry
+* accessing directory entries by title also makes use of cached directory entries which are referenced by the path pointers, as implemented in libzim.
+
+Directory Entries
+==================
+
+Directory entries hold the meta information about all entries, images and other objects in a ZIM archive.
+
+There are different types of directory entries:
+
+Content Entry
+-------------
+
++------------------+---------+--------+----------------+-------------------------------------------------------+
+| Field Name       | Type    | Offset | Length         | Description                                           |
++------------------+---------+--------+----------------+-------------------------------------------------------+
+| mimetype         | integer | 0      | 2              | MIME type number as defined in the MIME type list     |
++------------------+---------+--------+----------------+-------------------------------------------------------+
+| parameter len    | byte    | 2      | 1              | (not used) length of extra paramters (must be 0)      |
++------------------+---------+--------+----------------+-------------------------------------------------------+
+| namespace        | char    | 3      | 1              | defines to which namespace this directory entry       |
+|                  |         |        |                | belongs                                                |
++------------------+---------+--------+----------------+-------------------------------------------------------+
+| revision         | integer | 4      | 4              | (not used) identifies a revision of the contents of   |
+|                  |         |        |                | this directory entry, needed to identify updates or   |
+|                  |         |        |                | revisions in the original history (must be 0)         |
++------------------+---------+--------+----------------+-------------------------------------------------------+
+| cluster number   | integer | 8      | 4              | cluster number in which the data of this directory    |
+|                  |         |        |                | entry is stored                                       |
++------------------+---------+--------+----------------+-------------------------------------------------------+
+| blob number      | integer | 12     | 4              | blob number inside the compressed cluster where the   |
+|                  |         |        |                | contents are stored                                   |
++------------------+---------+--------+----------------+-------------------------------------------------------+
+| path             | string  | 16     | zero terminated | string with the path as referred in the path pointer  |
+|                  |         |        |                | list                                                  |
++------------------+---------+--------+----------------+-------------------------------------------------------+
+| title            | string  | n/a    | zero terminated | string with an title as referred in the Title pointer |
+|                  |         |        |                | list or empty; in case it is empty, the path is used  |
+|                  |         |        |                | as title                                              |
++------------------+---------+--------+----------------+-------------------------------------------------------+
+| parameter        | data    |        | see parameter  | (not used) extra parameters                          |
+|                  |         |        | len            |                                                       |
++------------------+---------+--------+----------------+-------------------------------------------------------+
+
+Redirect Entry
+--------------
+
++------------------+---------+--------+----------------+-------------------------------------------------------+
+| Field Name       | Type    | Offset | Length         | Description                                           |
++------------------+---------+--------+----------------+-------------------------------------------------------+
+| mimetype         | integer | 0      | 2              | 0xffff for redirect                                   |
++------------------+---------+--------+----------------+-------------------------------------------------------+
+| parameter len    | byte    | 2      | 1              | (not used) length of extra paramters                  |
++------------------+---------+--------+----------------+-------------------------------------------------------+
+| namespace        | char    | 3      | 1              | defines to which namespace this directory entry       |
+|                  |         |        |                | belongs                                                |
++------------------+---------+--------+----------------+-------------------------------------------------------+
+| revision         | integer | 4      | 4              | (not used) identifies a revision of the contents of   |
+|                  |         |        |                | this directory entry, needed to identify updates or   |
+|                  |         |        |                | revisions in the original history (must be 0)         |
++------------------+---------+--------+----------------+-------------------------------------------------------+
+| redirect index   | integer | 8      | 4              | pointer to the directory entry of the redirect target |
++------------------+---------+--------+----------------+-------------------------------------------------------+
+| path             | string  | 12     | zero terminated | string with the path as referred in the path pointer  |
+|                  |         |        |                | list                                                  |
++------------------+---------+--------+----------------+-------------------------------------------------------+
+| title            | string  | n/a    | zero terminated | string with an title as referred in the Title pointer |
+|                  |         |        |                | list or empty; in case it is empty, the path is used  |
+|                  |         |        |                | as title                                              |
++------------------+---------+--------+----------------+-------------------------------------------------------+
+| parameter        | data    |        | see parameter  | (not used) extra parameters                          |
+|                  |         |        | len            |                                                       |
++------------------+---------+--------+----------------+-------------------------------------------------------+
+
+None of the strings should have control characters from U+0000 through U+001F.
+
+Note that rather than creating redirects, you might prefer to create an alias, see ZIM Redirect Vs Alias.
+
+Linktarget or deleted Entry (DEPRECATED)
+-----------------------------------------
+
+There is two kinds of deprecated entry that could be found in pretty old zim files (I, main develloper of libzim, never saw it).
+
+They have mimetype equal to 0xfffe or 0xfffd. Reader implementation may check for those value and ignore the whole dirent.
+
+Cluster Pointer List (clusterPtrPos)
+=====================================
+
+The cluster pointer list is a list of 8 byte offsets which point to all data clusters in a ZIM archive.
+
++-----------------+---------+----------+--------+------------------------------------------+
+| Field Name      | Type    | Offset   | Length | Description                              |
++-----------------+---------+----------+--------+------------------------------------------+
+| <1st Cluster>   | integer | 0        | 8      | pointer to the <1st Cluster>             |
++-----------------+---------+----------+--------+------------------------------------------+
+| <2nd Cluster>   | integer | 8        | 8      | pointer to the <2nd Cluster>             |
++-----------------+---------+----------+--------+------------------------------------------+
+| <nth Cluster>   | integer | (n-1)*8  | 8      | pointer to the <nth Cluster>             |
++-----------------+---------+----------+--------+------------------------------------------+
+| ...             | integer | ...      | 8      | ...                                      |
++-----------------+---------+----------+--------+------------------------------------------+
+
+Clusters
+=========
+
+The clusters contain the actual data of the directory entries. Clusters can be compressed or uncompressed. The purpose of the clusters are that data of more than one directory entry can be compressed inside one cluster, making the compression much more efficient. Typically clusters have a size of about 1 MB.
+
+The first byte of the cluster identifies some information about the cluster.
+
+The first fourth low bits identifies if the cluster compression type:
+* No compression is indicated by a value of 1
+* Compressed clusters are indicated by a value of 4 (LZMA2 compression (or more precisely XZ, since there is a XZ header)) or 5 (Zstandard compression).
+* There have been other compression algorithms used before which have been removed: 2 for zlib and 3 for bzip2.
+* 0 is an obselete code for no compression (inhereted from the Zeno)
+
+The fifth bit identifies the cluster is extended or not :
+* By default (5th bit == 0) the cluster is not extended. It means that the offsets are stored in a 4 bytes length integer. Thus contents stored in the cluster cannot exceed 4Go.
+* If the cluster is extended (5th bit == 1), the offsets are stored in 8 bytes length integer. Thus contents stored in the cluster can exceed 4Go.
+A cluster can be extended only if the zim major version is 6. Else (major version == 5) cluster will always be not extended.
+
+The libzim uses xz-utils (http://tukaani.org/xz/) as a C++ implementation of lzma2, for Java see XZ-Java (http://tukaani.org/xz/java.html).
+
+To find the data of a specific directory entry within a cluster the uncompressed cluster has a list of pointers to blobs within the uncompressed cluster after the first byte.
+
++---------------------------+---------+-----------------------+--------------+--------------------------------------------------+
+| Field Name                | Type    | Offset                | Length       | Description                                      |
++---------------------------+---------+-----------------------+--------------+--------------------------------------------------+
+| cluster information       | integer | 0                     | 1            | Fourth low bits : 1: no compression,             |
+|                           |         |                       |              | 4: LZMA2 compressed, 5: zstd compressed.         |
+|                           |         |                       |              | Firth bits : 0: normal (OFFSET_SIZE=4)           |
+|                           |         |                       |              | 1: extended (OFFSET_SIZE=8)                      |
++---------------------------+---------+-----------------------+--------------+--------------------------------------------------+
+|                           |         | The following data    |              |                                                  |
+|                           |         | bytes have to be      |              |                                                  |
+|                           |         | uncompressed!         |              |                                                  |
++---------------------------+---------+-----------------------+--------------+--------------------------------------------------+
+| <1st Blob>                | integer | 1                     | OFFSET_SIZE  | offset to the <1st Blob>                         |
++---------------------------+---------+-----------------------+--------------+--------------------------------------------------+
+| <2nd Blob>                | integer | 1+OFFSET_SIZE         | OFFSET_SIZE  | offset to the <2nd Blob>                         |
++---------------------------+---------+-----------------------+--------------+--------------------------------------------------+
+| <nth Blob>                | integer | (n-1)*OFFSET_SIZE+1   | OFFSET_SIZE  | offset to the <nth Blob>                         |
++---------------------------+---------+-----------------------+--------------+--------------------------------------------------+
+| ...                       | integer | ...                   | OFFSET_SIZE  | ...                                              |
++---------------------------+---------+-----------------------+--------------+--------------------------------------------------+
+| <last blob / end>         | integer | n/a                   | OFFSET_SIZE  | offset to the end of the cluster                 |
++---------------------------+---------+-----------------------+--------------+--------------------------------------------------+
+| <1st Blob>                | data    | n/a                   | n/a          | data of the <1st Blob>                           |
++---------------------------+---------+-----------------------+--------------+--------------------------------------------------+
+| <2nd Blob>                | data    | n/a                   | n/a          | data of the <2nd Blob>                           |
++---------------------------+---------+-----------------------+--------------+--------------------------------------------------+
+| ...                       | data    | ...                   | n/a          | ...                                              |
++---------------------------+---------+-----------------------+--------------+--------------------------------------------------+
+
+The offset addresses uncompressed data. The last pointer points to the end of the data area. So there is always one more offset than blobs. Since the first offset points to the start of the first data, the number of offsets can be determined by dividing this offset by OFFSET_SIZE. The size of one blob is calculated by the difference of two consecutive offsets.
+
+Namespaces
+===========
+
+Namespaces separate different types of directory entries - which might have the same title or path - stored in the ZIM archive Format.
+
+The new namespace usage put a strong semantics on the namespaces. The libzim uses this semantics and provide different kind of API to access the different kind of entries.
+
+The libzim hide the namespace to the user, so a entry foo.html in namespace C will be accessible as foo.html. libzim provides specific API to access metadata.
+
+Other implementation are free to explicit the namespace or not (but need to provide some fallback for all namespace usage)
+
++-----------+-----------------------------------------------------------+
+| Namespace | Description                                               |
++-----------+-----------------------------------------------------------+
+| C         | User content entries - see Article Format                |
++-----------+-----------------------------------------------------------+
+| M         | ZIM metadata - see Metadata                              |
++-----------+-----------------------------------------------------------+
+| W         | Well know entries (MainPage, Favicon) - see Well known   |
+|           | entries                                                   |
++-----------+-----------------------------------------------------------+
+| X         | search indexes - see Search indexes                      |
++-----------+-----------------------------------------------------------+
+
+Paths
+======
+
+Path Encoding in the ZIM
+-------------------------
+
+The Path in the PathPointerlist are encoded in utf-8 and are NOT url encoded.
+
+For instance, if you store in the ZIM an HTML document with a href pointing to characters%20%C3%A9ncoding.html, you have to store the corresponding ZIM entry at characters encoding.html Path.
+
+Or if you want to store a ZIM entry at index.html?param=value, the HTML document pointing to it will have to use the index.html%3Fparam%3Dvalue href.
+
+The reason behind it is that libzim is agnostic of which kind of content and which kind of readers will be used. Everything around URL encoding is purely linked to HTTP / HTML / Web standards.
+
+When serving web content (which is usually the case), some readers process the requests and already do the url decoding internally, whereas most readers will handle the paths directly.
+
+The same applies to querystring which might be absorbed by some webservers and not passed to the libzim.
+
+In any case, the reader will have to do the HTTP URL decoding before passing the parameter to libzim.
+
+Local Anchors
+--------------
+
+Many HTML href - especially when a table of contents is used - use local anchors to jump within a document.
+
+    <a href="foo#headline1">jump to article foo, headline 1</a>
+
+When a web browser is used a reader, it handles these local anchors locally client-side. This is never sent to the webserver, and even less to libzim. The browser will determine by itself if another ZIM entry has to be loaded (local anchor inside another document than the currently shown) and will send a request only with the document URL without the local anchor - in our example "foo". After the document has been loaded the browser will then search for the local anchor tag and jump to the right location.
+
+If you use a common rendering engine or HTML widget you don't have to care for this cases, you can just use the requests as they are submitted by the engine / widget.
+
+Should you render the article contents by yourself you have to consider this and take care of it before you hand-out requests to libzim.
+
+Encodings
+==========
+
+Character Encoding
+-------------------
+
+The standard encoding for ZIM archive content is UTF-8. So both article data and Path should be handled accordingly.
+
+Integer Encoding
+-----------------
+
+All types are little-endian.
+
+All integers are unsigned integers (uint_16, uint_32, uint_64).
+
+All lengths are bytes.
+
+Split ZIM archives in chunks
+=============================
+
+ZIM archives can be split in multiple chunk files. This is necessary to be able to store big (over 4GB for example) ZIM archives in file systems with single file size restrictions (like FAT32). The size of each ZIM file chunk can be "choosen" but the ZIM archives can't be cut anywhere (since libzim 3, october 2017). ZIM archives have to be cut between clusters. In addition, the naming of ZIM archive chunks is really important: they should be named like following (the file name extensions matter): foobar.zimaa, foobar.zimab, foobar.zimac. To perform this splitting operation easily, you can rely on the zimsplit command line tool (part of the ZIM tools (https://github.com/openzim/zim-tools)).
+
+Other
+======
+
+pathPtrPos was initially called urlPtrPos (and path in dirent structure was called url). In April 2024, we changed the wording from url to path as it better conveys the fact that we are storing a path for the entry and not a full url (with scheme, host...). Note that this is just a wording change and the semantic has not changed at all. Implementations do not need to change anything (except a potential renaming of variables to better follow the spec).
+
+See also
+=========
+
+* Zeno file format (deprecated)
+* ZIM File Format/4 (deprecated)
+* ZIM File Example

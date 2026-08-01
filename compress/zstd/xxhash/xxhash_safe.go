@@ -1,6 +1,7 @@
 package xxhash
 
-// Sum64String computes the 64-bit xxHash digest of s.
+// Sum64String computes the 64-bit xxHash digest of the string s.
+// It is equivalent to Sum64([]byte(s)).
 func Sum64String(s string) uint64 {
 	return Sum64([]byte(s))
 }

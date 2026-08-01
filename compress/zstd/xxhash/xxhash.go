@@ -1,6 +1,22 @@
-// Package xxhash implements the 64-bit variant of xxHash (XXH64) as described
-// at http://cyan4973.github.io/xxHash/.
-// THIS IS VENDORED: Go to github.com/cespare/xxhash for original package.
+// Package xxhash implements the 64-bit variant of xxHash (XXH64).
+//
+// xxHash is an extremely fast non-cryptographic hash algorithm working
+// at RAM speed limits. This implementation follows the algorithm
+// described at http://cyan4973.github.io/xxHash/.
+//
+// Sum64 computes the hash of a byte slice:
+//
+//	h := xxhash.Sum64(data)
+//
+// Digest implements hash.Hash64 for incremental hashing:
+//
+//	d := xxhash.New()
+//	d.Write(chunk1)
+//	d.Write(chunk2)
+//	h := d.Sum64()
+//
+// Digest also implements encoding.BinaryMarshaler and
+// encoding.BinaryUnmarshaler for state serialization.
 
 package xxhash
 

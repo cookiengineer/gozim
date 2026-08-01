@@ -1,10 +1,14 @@
-// Package zim implements reading and writing of ZIM files.
+// Package zim implements reading and writing of ZIM files, the open
+// file format used to store wiki content for offline viewing.
 //
-// ZIM is an open file format used to store wiki content offline.
-// It is primarily used by the Kiwix project and other offline
-// content distribution systems.
+// ZIM files are used primarily by the Kiwix project and other offline
+// content distribution systems. The format supports compressed storage
+// of HTML pages, images, and other web content with full-text search
+// capabilities.
 //
 // # Reading ZIM files
+//
+// Open a ZIM file and read an entry by its path:
 //
 //	archive, err := zim.Open("wikipedia.zim")
 //	if err != nil {
@@ -16,15 +20,18 @@
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
-//
 //	item, err := entry.Item(false)
-//	if err != nil {
-//	    log.Fatal(err)
+//	data, err := item.DataAll()
+//
+// Iterate over all entries:
+//
+//	for entry := range archive.IterateByPath() {
+//	    fmt.Println(entry.Path(), entry.Title())
 //	}
 //
-//	data := item.DataAll()
-//
 // # Writing ZIM files
+//
+// Create a new ZIM file with content entries and metadata:
 //
 //	writer := zim.NewWriter().
 //	    SetCompression(zim.CompressionZstd).
@@ -39,19 +46,41 @@
 //	for _, item := range items {
 //	    writer.AddItem(item)
 //	}
-//
 //	writer.AddMetadata("Title", "My Wiki")
 //	writer.AddMetadata("Language", "eng")
 //	writer.Finish()
 //
 // # Searching
 //
+// Search across one or more archives with BM25 ranking:
+//
 //	searcher := zim.NewSearcher(archive)
-//	results, err := searcher.Search("quantum physics", 0, 20)
-//	if err != nil {
-//	    log.Fatal(err)
+//	result, err := searcher.Search("quantum physics", 0, 20)
+//	for _, r := range result.Results() {
+//	    fmt.Println(r.Title, r.Score)
 //	}
-//	for _, result := range results.Results() {
-//	    fmt.Println(result.Title, result.Score)
-//	}
+//
+// # Namespaces
+//
+// ZIM entries are organized into namespaces. The new scheme (v6.1+)
+// uses:
+//
+//   - NamespaceContent (C): user-facing content
+//   - NamespaceMetadata (M): archive metadata
+//   - NamespaceIndex (X): full-text indexes and title listings
+//
+// The old scheme (v5 and v6.0) also includes:
+//
+//   - NamespaceArticle (A): articles (HTML)
+//   - NamespaceImage (I): images
+//   - NamespaceScript (J): scripts
+//   - NamespaceLayout (-): CSS and templates
+//
+// # Compression
+//
+// Clusters of entries are compressed together. Supported compression:
+//
+//   - CompressionNone (1): no compression
+//   - CompressionZstd (5): Zstandard compression (default for new files)
+//   - CompressionLzma (4): LZMA2/XZ compression (legacy read support)
 package zim
