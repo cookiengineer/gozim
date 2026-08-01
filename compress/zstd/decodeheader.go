@@ -1,6 +1,3 @@
-// Copyright 2020+ Klaus Post. All rights reserved.
-// License information can be found in the LICENSE file.
-
 package zstd
 
 import (
@@ -128,7 +125,6 @@ func (h *Header) DecodeAndStrip(in []byte) (remain []byte, err error) {
 	}
 
 	// Read Window_Descriptor
-	// https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md#window_descriptor
 	if len(in) < 1 {
 		return nil, io.ErrUnexpectedEOF
 	}
@@ -154,7 +150,6 @@ func (h *Header) DecodeAndStrip(in []byte) (remain []byte, err error) {
 	}
 
 	// Read Dictionary_ID
-	// https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md#dictionary_id
 	if size := fhd & 3; size != 0 {
 		if size == 3 {
 			size = 4

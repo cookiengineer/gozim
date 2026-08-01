@@ -1,7 +1,3 @@
-// Copyright 2019+ Klaus Post. All rights reserved.
-// License information can be found in the LICENSE file.
-// Based on work by Yann Collet, released under BSD License.
-
 package zstd
 
 import (
@@ -12,21 +8,17 @@ import (
 
 var (
 	// fsePredef are the predefined fse tables as defined here:
-	// https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md#default-distributions
 	// These values are already transformed.
 	fsePredef [3]fseDecoder
 
 	// fsePredefEnc are the predefined encoder based on fse tables as defined here:
-	// https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md#default-distributions
 	// These values are already transformed.
 	fsePredefEnc [3]fseEncoder
 
 	// symbolTableX contain the transformations needed for each type as defined in
-	// https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md#the-codes-for-literals-lengths-match-lengths-and-offsets
 	symbolTableX [3][]baseOffset
 
 	// maxTableSymbol is the biggest supported symbol for each table type
-	// https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md#the-codes-for-literals-lengths-match-lengths-and-offsets
 	maxTableSymbol = [3]uint8{tableLiteralLengths: maxLiteralLengthSymbol, tableOffsets: maxOffsetLengthSymbol, tableMatchLengths: maxMatchLengthSymbol}
 
 	// bitTables is the bits table for each table.

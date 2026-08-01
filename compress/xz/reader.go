@@ -1,10 +1,3 @@
-// Copyright 2014-2022 Ulrich Kunitz. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-// Package xz supports the compression and decompression of xz files. It
-// supports version 1.0.4 of the specification without the non-LZMA2
-// filters. See http://tukaani.org/xz/xz-file-format-1.0.4.txt
 package xz
 
 import (
@@ -13,8 +6,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-
-	"github.com/cookiengineer/gozim/compress/xz/xlog"
 	"github.com/cookiengineer/gozim/compress/lzma"
 )
 
@@ -151,7 +142,6 @@ func (c ReaderConfig) newStreamReader(xz io.Reader) (r *streamReader, err error)
 	if err = r.h.UnmarshalBinary(data); err != nil {
 		return nil, err
 	}
-	xlog.Debugf("xz header %s", r.h)
 	if r.newHash, err = newHashFunc(r.h.flags); err != nil {
 		return nil, err
 	}
@@ -186,7 +176,6 @@ func (r *streamReader) readTail() error {
 	if err = f.UnmarshalBinary(p); err != nil {
 		return err
 	}
-	xlog.Debugf("xz footer %s", f)
 	if f.flags != r.h.flags {
 		return errors.New("xz: footer flags incorrect")
 	}
@@ -210,7 +199,6 @@ func (r *streamReader) Read(p []byte) (n int, err error) {
 				}
 				return n, err
 			}
-			xlog.Debugf("block %v", *bh)
 			r.br, err = r.ReaderConfig.newBlockReader(r.xz, bh,
 				hlen, r.newHash())
 			if err != nil {

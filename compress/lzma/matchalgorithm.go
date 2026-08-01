@@ -1,7 +1,3 @@
-// Copyright 2014-2022 Ulrich Kunitz. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package lzma
 
 import "errors"
@@ -12,14 +8,14 @@ type MatchAlgorithm byte
 
 // Supported matcher algorithms.
 const (
-	HashTable4 MatchAlgorithm = iota
-	BinaryTree
+	AlgorithmHashTable  MatchAlgorithm = iota
+	AlgorithmBinaryTree
 )
 
 // maStrings are used by the String method.
 var maStrings = map[MatchAlgorithm]string{
-	HashTable4: "HashTable4",
-	BinaryTree: "BinaryTree",
+	AlgorithmHashTable:  "HashTable",
+	AlgorithmBinaryTree: "BinaryTree",
 }
 
 // String returns a string representation of the Matcher.
@@ -43,10 +39,10 @@ func (a MatchAlgorithm) verify() error {
 
 func (a MatchAlgorithm) new(dictCap int) (m matcher, err error) {
 	switch a {
-	case HashTable4:
-		return newHashTable(dictCap, 4)
-	case BinaryTree:
-		return newBinTree(dictCap)
+	case AlgorithmHashTable:
+		return NewHashTable(dictCap, 4)
+	case AlgorithmBinaryTree:
+		return NewBinaryTree(dictCap)
 	}
 	return nil, errUnsupportedMatchAlgorithm
 }

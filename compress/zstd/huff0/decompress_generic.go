@@ -1,5 +1,3 @@
-
-// This file contains a generic implementation of Decoder.Decompress4X.
 package huff0
 
 import (

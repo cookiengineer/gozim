@@ -1,7 +1,3 @@
-// Copyright 2014-2022 Ulrich Kunitz. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package lzma
 
 import (
@@ -24,11 +20,11 @@ type node struct {
 // wordLen is the number of bytes represented by the v field of a node.
 const wordLen = 4
 
-// binTree supports the identification of the next operation based on a
+// BinTree supports the identification of the next operation based on a
 // binary tree.
 //
 // Nodes will be identified by their index into the ring buffer.
-type binTree struct {
+type BinaryTree struct {
 	dict *encoderDict
 	// ring buffer of nodes
 	node []node
@@ -50,19 +46,19 @@ type binTree struct {
 // reference.
 const null uint32 = 1<<32 - 1
 
-// newBinTree initializes the binTree structure. The capacity defines
+// NewBinaryTree initializes the BinaryTree structure. The capacity defines
 // the size of the buffer and defines the maximum distance for which
 // matches will be found.
-func newBinTree(capacity int) (t *binTree, err error) {
+func NewBinaryTree(capacity int) (t *BinaryTree, err error) {
 	if capacity < 1 {
 		return nil, errors.New(
-			"newBinTree: capacity must be larger than zero")
+			"NewBinaryTree: capacity must be larger than zero")
 	}
 	if int64(capacity) >= int64(null) {
 		return nil, errors.New(
-			"newBinTree: capacity must less 2^{32}-1")
+			"NewBinaryTree: capacity must less 2^{32}-1")
 	}
-	t = &binTree{
+	t = &BinaryTree{
 		node: make([]node, capacity),
 		hoff: -int64(wordLen),
 		root: null,
@@ -71,10 +67,10 @@ func newBinTree(capacity int) (t *binTree, err error) {
 	return t, nil
 }
 
-func (t *binTree) SetDict(d *encoderDict) { t.dict = d }
+func (t *BinaryTree) SetDict(d *encoderDict) { t.dict = d }
 
 // WriteByte writes a single byte into the binary tree.
-func (t *binTree) WriteByte(c byte) error {
+func (t *BinaryTree) WriteByte(c byte) error {
 	t.x = (t.x << 8) | uint32(c)
 	t.hoff++
 	if t.hoff < 0 {
@@ -94,8 +90,8 @@ func (t *binTree) WriteByte(c byte) error {
 	return nil
 }
 
-// Writes writes a sequence of bytes into the binTree structure.
-func (t *binTree) Write(p []byte) (n int, err error) {
+// Writes writes a sequence of bytes into the BinaryTree structure.
+func (t *BinaryTree) Write(p []byte) (n int, err error) {
 	for _, c := range p {
 		t.WriteByte(c)
 	}
@@ -104,7 +100,7 @@ func (t *binTree) Write(p []byte) (n int, err error) {
 
 // add puts the node v into the tree. The node must not be part of the
 // tree before.
-func (t *binTree) add(v uint32) {
+func (t *BinaryTree) add(v uint32) {
 	vn := &t.node[v]
 	// Set left and right to null indices.
 	vn.l, vn.r = null, null
@@ -139,7 +135,7 @@ func (t *binTree) add(v uint32) {
 
 // parent returns the parent node index of v and the pointer to v value
 // in the parent.
-func (t *binTree) parent(v uint32) (p uint32, ptr *uint32) {
+func (t *BinaryTree) parent(v uint32) (p uint32, ptr *uint32) {
 	if t.root == v {
 		return null, &t.root
 	}
@@ -153,7 +149,7 @@ func (t *binTree) parent(v uint32) (p uint32, ptr *uint32) {
 }
 
 // Remove node v.
-func (t *binTree) remove(v uint32) {
+func (t *BinaryTree) remove(v uint32) {
 	vn := &t.node[v]
 	p, ptr := t.parent(v)
 	l, r := vn.l, vn.r
@@ -213,7 +209,7 @@ func (t *binTree) remove(v uint32) {
 // brace it. The node highest in the tree with the value x will be
 // returned. All other nodes with the same value live in left subtree of
 // the returned node.
-func (t *binTree) search(v uint32, x uint32) (a, b uint32) {
+func (t *BinaryTree) search(v uint32, x uint32) (a, b uint32) {
 	a, b = null, null
 	if v == null {
 		return
@@ -241,7 +237,7 @@ func (t *binTree) search(v uint32, x uint32) (a, b uint32) {
 
 // max returns the node with maximum value in the subtree with v as
 // root.
-func (t *binTree) max(v uint32) uint32 {
+func (t *BinaryTree) max(v uint32) uint32 {
 	if v == null {
 		return null
 	}
@@ -256,7 +252,7 @@ func (t *binTree) max(v uint32) uint32 {
 
 // min returns the node with the minimum value in the subtree with v as
 // root.
-func (t *binTree) min(v uint32) uint32 {
+func (t *BinaryTree) min(v uint32) uint32 {
 	if v == null {
 		return null
 	}
@@ -270,7 +266,7 @@ func (t *binTree) min(v uint32) uint32 {
 }
 
 // pred returns the in-order predecessor of node v.
-func (t *binTree) pred(v uint32) uint32 {
+func (t *BinaryTree) pred(v uint32) uint32 {
 	if v == null {
 		return null
 	}
@@ -291,7 +287,7 @@ func (t *binTree) pred(v uint32) uint32 {
 }
 
 // succ returns the in-order successor of node v.
-func (t *binTree) succ(v uint32) uint32 {
+func (t *BinaryTree) succ(v uint32) uint32 {
 	if v == null {
 		return null
 	}
@@ -348,7 +344,7 @@ func dumpX(x uint32) string {
 
 /*
 // dumpNode writes a representation of the node v into the io.Writer.
-func (t *binTree) dumpNode(w io.Writer, v uint32, indent int) {
+func (t *BinaryTree) dumpNode(w io.Writer, v uint32, indent int) {
 	if v == null {
 		return
 	}
@@ -370,14 +366,14 @@ func (t *binTree) dumpNode(w io.Writer, v uint32, indent int) {
 }
 
 // dump prints a representation of the binary tree into the writer.
-func (t *binTree) dump(w io.Writer) error {
+func (t *BinaryTree) dump(w io.Writer) error {
 	bw := bufio.NewWriter(w)
 	t.dumpNode(bw, t.root, 0)
 	return bw.Flush()
 }
 */
 
-func (t *binTree) distance(v uint32) int {
+func (t *BinaryTree) distance(v uint32) int {
 	dist := int(t.front) - int(v)
 	if dist <= 0 {
 		dist += len(t.node)
@@ -395,7 +391,7 @@ type matchParams struct {
 	stopShorter bool
 }
 
-func (t *binTree) match(m match, distIter func() (int, bool), p matchParams,
+func (t *BinaryTree) match(m match, distIter func() (int, bool), p matchParams,
 ) (r match, checked int, accepted bool) {
 	buf := &t.dict.buf
 	for {
@@ -443,7 +439,7 @@ func (t *binTree) match(m match, distIter func() (int, bool), p matchParams,
 	}
 }
 
-func (t *binTree) NextOp(rep [4]uint32) operation {
+func (t *BinaryTree) NextOp(rep [4]uint32) operation {
 	// retrieve maxMatchLen data
 	n, _ := t.dict.buf.Peek(t.data[:maxMatchLen])
 	if n == 0 {

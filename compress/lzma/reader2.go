@@ -1,14 +1,8 @@
-// Copyright 2014-2022 Ulrich Kunitz. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package lzma
 
 import (
 	"errors"
 	"io"
-
-	"github.com/cookiengineer/gozim/compress/xz/xlog"
 )
 
 // Reader2Config stores the parameters for the LZMA2 reader.
@@ -87,7 +81,6 @@ func (r *Reader2) startChunk() error {
 		}
 		return err
 	}
-	xlog.Debugf("chunk header %v", header)
 	if err = r.cstate.next(header.ctype); err != nil {
 		return err
 	}

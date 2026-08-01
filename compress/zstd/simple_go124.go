@@ -1,6 +1,3 @@
-// Copyright 2025+ Klaus Post. All rights reserved.
-// License information can be found in the LICENSE file.
-
 //go:build go1.24
 
 package zstd

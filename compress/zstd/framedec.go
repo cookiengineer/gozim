@@ -1,7 +1,3 @@
-// Copyright 2019+ Klaus Post. All rights reserved.
-// License information can be found in the LICENSE file.
-// Based on work by Yann Collet, released under BSD License.
-
 package zstd
 
 import (
@@ -135,8 +131,11 @@ func (d *frameDec) reset(br byteBuffer) error {
 		return errors.New("reserved bit set on frame header")
 	}
 
+	if fhd&(1<<4) != 0 {
+		return errors.New("unused bit set on frame header")
+	}
+
 	// Read Window_Descriptor
-	// https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md#window_descriptor
 	d.WindowSize = 0
 	if !d.SingleSegment {
 		wd, err := br.readByte()
@@ -156,7 +155,6 @@ func (d *frameDec) reset(br byteBuffer) error {
 	}
 
 	// Read Dictionary_ID
-	// https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md#dictionary_id
 	d.DictionaryID = 0
 	if size := fhd & 3; size != 0 {
 		if size == 3 {

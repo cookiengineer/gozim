@@ -1,12 +1,7 @@
-
-// Copyright 2019+ Klaus Post. All rights reserved.
-// License information can be found in the LICENSE file.
-
 package zstd
 
 import (
 	"math/bits"
-
 	"github.com/cookiengineer/gozim/compress/zstd/le"
 )
 

@@ -1,7 +1,3 @@
-// Copyright 2014-2022 Ulrich Kunitz. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package hash
 
 // Roller provides an interface for rolling hashes. The hash value will become

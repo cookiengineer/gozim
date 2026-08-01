@@ -66,8 +66,7 @@ func (d *dict) LitEncoder() *huff0.Scratch {
 	return d.litEnc
 }
 
-// Load a dictionary as described in
-// https://github.com/facebook/zstd/blob/master/doc/zstd_compression_format.md#dictionary-format
+// Load a dictionary
 func loadDict(b []byte) (*dict, error) {
 	// Check static field size.
 	if len(b) <= 8+(3*4) {

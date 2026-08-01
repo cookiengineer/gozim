@@ -1,6 +1,3 @@
-// Package huff0 provides fast huffman encoding as used in zstd.
-//
-// See README.md at https://github.com/klauspost/compress/tree/master/huff0 for details.
 package huff0
 
 import (
@@ -17,7 +14,6 @@ const (
 	maxSymbolValue = 255
 
 	// zstandard limits tablelog to 11, see:
-	// https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md#huffman-tree-description
 	tableLogMax     = 11
 	tableLogDefault = 11
 	minTablelog     = 5

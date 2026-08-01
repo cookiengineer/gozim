@@ -1,13 +1,3 @@
-// Copyright 2014-2022 Ulrich Kunitz. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-// Package lzma supports the decoding and encoding of LZMA streams.
-// Reader and Writer support the classic LZMA format. Reader2 and
-// Writer2 support the decoding and encoding of LZMA2 streams.
-//
-// The package is written completely in Go and does not rely on any external
-// library.
 package lzma
 
 import (

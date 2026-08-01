@@ -1,14 +1,3 @@
-// Copyright 2018 Klaus Post. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-// Based on work Copyright (c) 2013, Yann Collet, released under BSD License.
-
-// Package fse provides Finite State Entropy encoding and decoding.
-//
-// Finite State Entropy encoding provides a fast near-optimal symbol encoding/decoding
-// for byte blocks as implemented in zstd.
-//
-// See https://github.com/klauspost/compress/tree/master/fse for more information.
 package fse
 
 import (

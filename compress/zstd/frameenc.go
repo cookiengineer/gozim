@@ -1,7 +1,3 @@
-// Copyright 2019+ Klaus Post. All rights reserved.
-// License information can be found in the LICENSE file.
-// Based on work by Yann Collet, released under BSD License.
-
 package zstd
 
 import (
@@ -56,7 +52,7 @@ func (f frameHeader) appendTo(dst []byte) []byte {
 	if f.ContentSize >= 65536+256 {
 		fcs++
 	}
-	if f.ContentSize >= 0xffffffff {
+	if f.ContentSize >= 0x100000000 {
 		fcs++
 	}
 
