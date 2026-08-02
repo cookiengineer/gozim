@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
-	"runtime"
 	"sync"
 )
 
@@ -107,7 +106,6 @@ type Writer struct {
 
 	compression  Compression
 	clusterSize  uint64
-	numWorkers   int
 	indexing     bool
 	language     string
 	uuid         Uuid
@@ -164,7 +162,6 @@ func NewWriter() *Writer {
 	return &Writer{
 		compression: CompressionZstd,
 		clusterSize: 2 * Megabyte,
-		numWorkers:  runtime.NumCPU(),
 		indexing:    false,
 		language:    "eng",
 		factory:     NewCompressorFactory(),
@@ -186,13 +183,6 @@ func (w *Writer) SetCompression(c Compression) *Writer {
 // Default: 2 MB.
 func (w *Writer) SetClusterSize(size uint64) *Writer {
 	w.clusterSize = size
-	return w
-}
-
-// SetWorkers sets the number of parallel compression workers.
-// Default: runtime.NumCPU().
-func (w *Writer) SetWorkers(n int) *Writer {
-	w.numWorkers = n
 	return w
 }
 
