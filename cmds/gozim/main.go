@@ -63,7 +63,7 @@ Examples:
   gozim unpack wikipedia.zim --output ./out/
   gozim pack ./content/ --output archive.zim --title "My Wiki"
   gozim search archive.zim "quantum physics" --limit 20
-  gozim check archive.zim --full
+  gozim check archive.zim
   gozim info archive.zim
   gozim trace archive.zim`)
 }

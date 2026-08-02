@@ -31,7 +31,7 @@ gozim unpack wikipedia.zim --output ./wiki/;
 gozim pack ./html-content --output archive.zim --title "My Wiki" --language eng;
 
 # Verify file integrity: checksum, broken links, redirect loops, redundancy
-gozim check wikipedia.zim --full;
+gozim check wikipedia.zim;
 
 # Print version
 gozim version;

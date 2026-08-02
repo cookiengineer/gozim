@@ -8,7 +8,7 @@ import (
 
 func Check(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "usage: gozim check <archive.zim> [--full]")
+		fmt.Fprintln(os.Stderr, "usage: gozim check <archive.zim>")
 		os.Exit(1)
 	}
 
