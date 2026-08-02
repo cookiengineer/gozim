@@ -158,6 +158,34 @@ cd /path/to/gozim;
 go test -v ./...;
 ```
 
+The current test coverage is:
+
+| Package                   | Coverage  | Tests   |
+|:--------------------------|----------:|--------:|
+| `archive/zim`             |     52.3% |      99 |
+| `archive/zim/glass`       |     67.6% |      40 |
+| `compress/lzma`           |     67.9% |      65 |
+| `compress/lzma/hash`      |    100.0% |      25 |
+| `compress/xz`             |     70.8% |      22 |
+| `compress/zstd`           |     43.6% |      64 |
+| `compress/zstd/huff0`     |     51.5% |      22 |
+| `compress/zstd/huff0/fse` |      0.0% |       0 |
+| `compress/zstd/le`        |      0.0% |       0 |
+| `compress/zstd/snapref`   |    100.0% |       5 |
+| `compress/zstd/xxhash`    |    100.0% |      21 |
+| **Total**                 | **47.0%** | **363** |
+
+## Specification Compliance Tests
+
+Each package has a specification compliance test suite, and the specifications are
+included in the repository in the [specifications](./specifications) folder for
+future reference.
+
+- [archive/zim compliance tests](./archive/zim/zim_spec_test.go)
+- [compress/lzma compliance tests](./compress/lzma/lzma_spec_test.go)
+- [compress/xz compliance tests](./compress/xz/xz_spec_test.go)
+- [compress/zstd compliance tests](./compress/zstd/zstd_spec_test.go)
+
 ## License
 
 This library is licensed under the [X11/MIT License](./LICENSE.txt)
