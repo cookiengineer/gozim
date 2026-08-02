@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"sort"
 	"sync"
 )
 
@@ -360,23 +361,43 @@ func (w *Writer) Finish() error {
 
 // finishWriting handles the actual ZIM file generation.
 func (w *Writer) finishWriting() error {
-	// 1. Write MIME list placeholder.
+	// 0. Group items into clusters (populates w.dirents).
+	clusters := w.groupItemsIntoClusters()
+
+	// Sort dirents by namespace then path (required for binary search lookups).
+	sort.Slice(w.dirents, func(i, j int) bool {
+		ni := w.dirents[i].Namespace
+		nj := w.dirents[j].Namespace
+		if ni != nj {
+			return ni < nj
+		}
+		return w.dirents[i].Path < w.dirents[j].Path
+	})
+
+	// Resolve redirect indices after sorting.
+	w.resolveRedirects()
+
+	// 1. Write MIME list at HeaderSize offset.
 	mimeListStart := int64(HeaderSize)
 	mimeListData := w.mimeList.Encode()
 	_, err := w.file.WriteAt(mimeListData, mimeListStart)
 	if err != nil {
 		return fmt.Errorf("writing MIME list: %w", err)
 	}
+	_, err = w.file.Seek(mimeListStart+int64(len(mimeListData)), 0)
+	if err != nil {
+		return fmt.Errorf("seeking after MIME list: %w", err)
+	}
 
 	// 2. Write directory entries.
 	direntStart := mimeListStart + int64(len(mimeListData))
-	direntPositions, err := w.writeDirents(direntStart)
+	direntPositions, direntTotalLen, err := w.writeDirents(direntStart)
 	if err != nil {
 		return err
 	}
 
 	// 3. Write URL pointer list.
-	urlPtrStart := direntStart + int64(direntPositions[len(direntPositions)-1])
+	urlPtrStart := direntStart + direntTotalLen
 	for _, direntPos := range direntPositions {
 		ptrBytes := make([]byte, 8)
 		binary.LittleEndian.PutUint64(ptrBytes, uint64(direntStart+int64(direntPos)))
@@ -388,42 +409,62 @@ func (w *Writer) finishWriting() error {
 
 	// 4. Write title index (v0: simple index of all entries sorted by title).
 	titleIdxStart := urlPtrStart + int64(len(w.dirents)*8)
-	// Skip title index for now; we'll write a placeholder at -1 in the header.
-	// v1 title index is stored as an internal ZIM entry.
 
-	// 5. Write clusters.
-	clusterPtrStart := titleIdxStart // + title index size (0 for now)
-	clusterOffsets, err := w.writeClusters(clusterPtrStart)
+	// 5. Write cluster pointer list first (reserve space).
+	clusterPtrStart := titleIdxStart
+	clusterDataStart := clusterPtrStart + int64(len(clusters)*8)
+
+	// 6. Write clusters at clusterDataStart.
+	clusterOffsets := make([]uint64, 0, len(clusters))
+	_, err = w.file.Seek(clusterDataStart, 0)
+	if err != nil {
+		return fmt.Errorf("seeking to cluster data: %w", err)
+	}
+	compressor, err := w.factory.CompressorForType(w.compression)
 	if err != nil {
 		return err
 	}
-
-	// 6. Compute checksum position.
-	checksumPos := clusterPtrStart + int64(len(w.dirents)*8)
-
-	for _, off := range clusterOffsets {
-		checksumPos = clusterPtrStart + int64(off)
+	currentOffset := uint64(0)
+	for _, blobs := range clusters {
+		clusterOffsets = append(clusterOffsets, currentOffset)
+		clusterData, err := EncodeCluster(w.compression, blobs, compressor)
+		if err != nil {
+			return fmt.Errorf("encoding cluster: %w", err)
+		}
+		n, err := w.file.Write(clusterData)
+		if err != nil {
+			return fmt.Errorf("writing cluster: %w", err)
+		}
+		currentOffset += uint64(n)
 	}
 
-	// 7. Write cluster pointer list.
+	// Write actual cluster pointer list at clusterPtrStart.
 	_, err = w.file.Seek(clusterPtrStart, 0)
 	if err != nil {
 		return fmt.Errorf("seeking to cluster pointer list: %w", err)
 	}
 	for _, off := range clusterOffsets {
 		ptrBytes := make([]byte, 8)
-		binary.LittleEndian.PutUint64(ptrBytes, uint64(clusterPtrStart+int64(off)))
-		_, err := w.file.Write(ptrBytes)
-		if err != nil {
-			return fmt.Errorf("writing cluster pointer: %w", err)
-		}
+		binary.LittleEndian.PutUint64(ptrBytes, uint64(clusterDataStart+int64(off)))
+		w.file.Write(ptrBytes)
 	}
 
-	// 8. Write header.
+	// 7. Compute checksum position.
+	checksumPos := clusterDataStart + int64(currentOffset)
+
+	// 8. Write empty checksum placeholder (16 zero bytes) at the end.
+	_, err = w.file.Seek(checksumPos, 0)
+	if err != nil {
+		return fmt.Errorf("seeking to checksum: %w", err)
+	}
+	zeroChecksum := make([]byte, 16)
+	w.file.Write(zeroChecksum)
+
+	// 9. Write header.
 	header := NewHeader()
 	header.Uuid = w.uuid
 	header.EntryCount = uint32(len(w.dirents))
-	header.ClusterCount = uint32(len(clusterOffsets) / 8) // approximate
+	header.ClusterCount = uint32(len(clusterOffsets))
 	header.UrlPtrPos = uint64(urlPtrStart)
 	header.TitleIdxPos = 0xFFFFFFFFFFFFFFFF // no v0 title index
 	header.ClusterPtrPos = uint64(clusterPtrStart)
@@ -449,30 +490,27 @@ func (w *Writer) finishWriting() error {
 	return nil
 }
 
-// writeDirents writes all directory entries and returns their byte offsets.
-func (w *Writer) writeDirents(startOffset int64) ([]int64, error) {
-	var positions []int64
-	currentPos := int64(0)
+// writeDirents writes all directory entries and returns their byte offsets
+// and the total byte length of all written dirents.
+func (w *Writer) writeDirents(startOffset int64) (positions []int64, totalLen int64, err error) {
+	var currentPos int64
 
 	for _, dirent := range w.dirents {
 		positions = append(positions, currentPos)
 
 		data := EncodeDirent(dirent)
-		n, err := w.file.Write(data)
-		if err != nil {
-			return nil, fmt.Errorf("writing dirent: %w", err)
+		n, werr := w.file.Write(data)
+		if werr != nil {
+			return nil, 0, fmt.Errorf("writing dirent: %w", werr)
 		}
 		currentPos += int64(n)
 	}
 
-	return positions, nil
+	return positions, currentPos, nil
 }
 
 // writeClusters writes all clusters and returns their byte offsets within the cluster section.
-func (w *Writer) writeClusters(clusterSectionStart int64) ([]uint64, error) {
-	// Group items into clusters.
-	clusters := w.groupItemsIntoClusters()
-
+func (w *Writer) writeClusters(clusterSectionStart int64, clusters [][][]byte) ([]uint64, error) {
 	var offsets []uint64
 	currentOffset := uint64(0)
 
@@ -604,9 +642,6 @@ func (w *Writer) groupItemsIntoClusters() [][][]byte {
 	if len(currentBlobs) > 0 {
 		clusters = append(clusters, currentBlobs)
 	}
-
-	// Resolve redirect indices.
-	w.resolveRedirects()
 
 	return clusters
 }

@@ -15,6 +15,7 @@ func ParseQuery(query string) (terms []string, phrases [][]string, notTerms []st
 	}
 
 	var current strings.Builder
+	var rawTerms []string
 	inQuote := false
 
 	for i := 0; i < len(query); {
@@ -22,7 +23,7 @@ func ParseQuery(query string) (terms []string, phrases [][]string, notTerms []st
 
 		if ch == '"' {
 			if current.Len() > 0 {
-				terms = append(terms, normalizeTerm(current.String()))
+				rawTerms = append(rawTerms, current.String())
 				current.Reset()
 			}
 			inQuote = !inQuote
@@ -33,7 +34,7 @@ func ParseQuery(query string) (terms []string, phrases [][]string, notTerms []st
 		if inQuote {
 			if ch == ' ' || ch == '\t' {
 				if current.Len() > 0 {
-					terms = append(terms, normalizeTerm(current.String()))
+					rawTerms = append(rawTerms, current.String())
 					current.Reset()
 				}
 				i++
@@ -46,9 +47,7 @@ func ParseQuery(query string) (terms []string, phrases [][]string, notTerms []st
 
 		if ch == ' ' || ch == '\t' {
 			if current.Len() > 0 {
-				word := current.String()
-				// End of in-quote phrase.
-				terms = append(terms, normalizeTerm(word))
+				rawTerms = append(rawTerms, current.String())
 				current.Reset()
 			}
 			i++
@@ -60,16 +59,15 @@ func ParseQuery(query string) (terms []string, phrases [][]string, notTerms []st
 	}
 
 	if current.Len() > 0 {
-		terms = append(terms, normalizeTerm(current.String()))
+		rawTerms = append(rawTerms, current.String())
 	}
 
-	// Separate NOT terms and phrases.
 	var cleanTerms []string
-	for _, t := range terms {
-		if strings.HasPrefix(t, "-") && len(t) > 1 {
-			notTerms = append(notTerms, t[1:])
+	for _, t := range rawTerms {
+		if strings.HasPrefix(t, "-") && len(t) > 1 && !strings.HasPrefix(t, "--") {
+			notTerms = append(notTerms, normalizeTerm(t[1:]))
 		} else {
-			cleanTerms = append(cleanTerms, t)
+			cleanTerms = append(cleanTerms, normalizeTerm(t))
 		}
 	}
 

@@ -101,7 +101,6 @@ func GenerateSnippet(content string, queryTerms []string, maxLen int) string {
 			result.WriteString(snippet[pos+idx : pos+idx+len(term)])
 			result.WriteString("**")
 			pos += idx + len(term)
-			snippetLower = strings.ToLower(snippet[pos:])
 		}
 		snippet = result.String()
 	}
