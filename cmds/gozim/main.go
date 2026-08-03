@@ -34,7 +34,7 @@ func main() {
 	case "help", "-h", "--help":
 		printUsage()
 	case "version", "--version":
-		fmt.Println("gozim v0.1.0")
+		fmt.Println("gozim v0.1.1")
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", command)
 		printUsage()
